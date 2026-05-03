@@ -25,7 +25,7 @@ export interface DnsUpdateResult {
 async function listRecords(
   cfApiToken: string,
   zoneId: string,
-  type: "A" | "AAAA",
+  type: "A" | "AAAA" | "CNAME",
   name: string
 ): Promise<CfDnsRecord[]> {
   const url = `${CF_API_BASE}/zones/${zoneId}/dns_records?type=${type}&name=${encodeURIComponent(name)}`;
@@ -134,6 +134,12 @@ export async function upsertDnsRecord(
       }
       return { success: true, message: "DNS record updated" };
     } else {
+      // A CNAME for the same hostname blocks creation of A/AAAA records.
+      // Delete it first so the POST succeeds.
+      const cnameRecords = await listRecords(cfApiToken, zoneId, "CNAME", hostname);
+      for (const cname of cnameRecords) {
+        await deleteRecord(cfApiToken, zoneId, cname.id);
+      }
       await postRecord(cfApiToken, zoneId, type, hostname, ip);
       return { success: true, message: "DNS record created" };
     }

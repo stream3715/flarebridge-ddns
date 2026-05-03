@@ -80,18 +80,19 @@ describe("upsertDnsRecord - create new record (POST)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("calls POST when no existing record is found", async () => {
+  it("calls POST when no existing record is found (no CNAME either)", async () => {
     const mockFetch = vi.mocked(fetch);
     mockFetch
-      .mockResolvedValueOnce(mockListResponse([]))
-      .mockResolvedValueOnce(mockMutateResponse(true));
+      .mockResolvedValueOnce(mockListResponse([]))   // list A
+      .mockResolvedValueOnce(mockListResponse([]))   // list CNAME
+      .mockResolvedValueOnce(mockMutateResponse(true)); // POST
 
     const result = await upsertDnsRecord(TOKEN, ZONE, HOSTNAME, IPV4, "A");
 
     expect(result.success).toBe(true);
     expect(result.message).toBe("DNS record created");
 
-    const postCall = mockFetch.mock.calls[1];
+    const postCall = mockFetch.mock.calls[2];
     expect(postCall![1]?.method).toBe("POST");
 
     const body = JSON.parse(postCall![1]?.body as string);
@@ -101,20 +102,49 @@ describe("upsertDnsRecord - create new record (POST)", () => {
     expect(body.proxied).toBe(false);
   });
 
-  it("calls POST for AAAA when no existing record is found", async () => {
+  it("calls POST for AAAA when no existing record is found (no CNAME either)", async () => {
     const mockFetch = vi.mocked(fetch);
     mockFetch
-      .mockResolvedValueOnce(mockListResponse([]))
-      .mockResolvedValueOnce(mockMutateResponse(true));
+      .mockResolvedValueOnce(mockListResponse([]))   // list AAAA
+      .mockResolvedValueOnce(mockListResponse([]))   // list CNAME
+      .mockResolvedValueOnce(mockMutateResponse(true)); // POST
 
     const result = await upsertDnsRecord(TOKEN, ZONE, HOSTNAME, IPV6, "AAAA");
 
     expect(result.success).toBe(true);
 
-    const postCall = mockFetch.mock.calls[1];
+    const postCall = mockFetch.mock.calls[2];
     const body = JSON.parse(postCall![1]?.body as string);
     expect(body.type).toBe("AAAA");
     expect(body.content).toBe(IPV6);
+  });
+
+  it("deletes existing CNAME then creates A record", async () => {
+    const CNAME_ID = "cname001";
+    const mockFetch = vi.mocked(fetch);
+    mockFetch
+      .mockResolvedValueOnce(mockListResponse([]))   // list A → none
+      .mockResolvedValueOnce(                        // list CNAME → found
+        mockListResponse([{ id: CNAME_ID, type: "CNAME", name: HOSTNAME, content: "other.example.com" }])
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 })) // DELETE CNAME
+      .mockResolvedValueOnce(mockMutateResponse(true));           // POST A
+
+    const result = await upsertDnsRecord(TOKEN, ZONE, HOSTNAME, IPV4, "A");
+
+    expect(result.success).toBe(true);
+    expect(result.message).toBe("DNS record created");
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+
+    const deleteCall = mockFetch.mock.calls[2];
+    expect(deleteCall![1]?.method).toBe("DELETE");
+    expect(deleteCall![0] as string).toContain(CNAME_ID);
+
+    const postCall = mockFetch.mock.calls[3];
+    expect(postCall![1]?.method).toBe("POST");
+    const body = JSON.parse(postCall![1]?.body as string);
+    expect(body.type).toBe("A");
+    expect(body.content).toBe(IPV4);
   });
 });
 
@@ -191,8 +221,9 @@ describe("upsertDnsRecord - error handling", () => {
   it("returns success=false when Cloudflare API returns success=false in body", async () => {
     const mockFetch = vi.mocked(fetch);
     mockFetch
-      .mockResolvedValueOnce(mockListResponse([]))
-      .mockResolvedValueOnce(mockMutateResponse(false, [{ message: "Invalid record" }]));
+      .mockResolvedValueOnce(mockListResponse([]))   // list A
+      .mockResolvedValueOnce(mockListResponse([]))   // list CNAME
+      .mockResolvedValueOnce(mockMutateResponse(false, [{ message: "Invalid record" }])); // POST
 
     const result = await upsertDnsRecord(TOKEN, ZONE, HOSTNAME, IPV4, "A");
     expect(result.success).toBe(false);
