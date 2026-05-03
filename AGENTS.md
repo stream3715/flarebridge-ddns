@@ -26,9 +26,24 @@ npm run dev        # Local dev server via wrangler dev
 npm run deploy     # Deploy to Cloudflare Workers
 ```
 
-## Required Secrets
+## Environment Variables
 
-Set these before deploying — never put values in `wrangler.toml` or source code:
+Secrets are managed via `.dev.vars` files — never stored in `wrangler.jsonc` or source code.
+
+| File | Purpose | Committed? |
+|------|---------|-----------|
+| `.dev.vars` | Local development | No (copy from `.dev.vars.example`) |
+| `.dev.vars.test` | Unit tests (fake values) | Yes |
+| `.dev.vars.example` | Template | Yes |
+
+### Local development setup
+
+```bash
+cp .dev.vars.example .dev.vars
+# then fill in real values
+```
+
+### Production deployment
 
 ```bash
 wrangler secret put API_KEY        # Auth key given to the router
@@ -62,6 +77,6 @@ Authentication: `Authorization: Basic base64(any:API_KEY)` header (preferred) or
 
 ## Testing
 
-Tests run in Miniflare (Workers runtime emulator) via `@cloudflare/vitest-pool-workers`. Fake bindings are injected in `vitest.config.mts`. The global `fetch` is stubbed in `dns.test.ts` to mock Cloudflare API responses.
+Tests run in Miniflare (Workers runtime emulator) via `@cloudflare/vitest-pool-workers`. Secrets are loaded from `.dev.vars.test` via `environment: "test"` in `vitest.config.mts`. The global `fetch` is stubbed in `dns.test.ts` to mock Cloudflare API responses.
 
 47 tests across 3 files. Run `npm test` to verify.
