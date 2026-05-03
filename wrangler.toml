@@ -1,0 +1,13 @@
+name = "flarebridge-ddns"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+# CF_ZONE_ID can be placed here if not treated as sensitive,
+# but the recommended approach is to set it as a secret:
+#   wrangler secret put CF_ZONE_ID
+# CF_ZONE_ID = ""
+
+# API_KEY and CF_API_TOKEN must always be set as secrets:
+#   wrangler secret put API_KEY
+#   wrangler secret put CF_API_TOKEN
