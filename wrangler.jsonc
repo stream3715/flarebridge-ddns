@@ -2,7 +2,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "flarebridge-ddns",
 	"main": "src/index.ts",
-	"compatibility_date": "2024-01-01",
+	"compatibility_date": "2026-04-21",
 	"observability": {
 		"logs": {
 			"enabled": true,
