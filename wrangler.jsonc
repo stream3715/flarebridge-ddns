@@ -3,6 +3,12 @@
 	"name": "flarebridge-ddns",
 	"main": "src/index.ts",
 	"compatibility_date": "2024-01-01",
+	"observability": {
+		"logs": {
+			"enabled": false,
+			"invocation_logs": true
+		}
+	},
 	"env": {
 		"test": {}
 	}
