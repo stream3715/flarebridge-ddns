@@ -8,12 +8,56 @@ interface Env {
   CF_ZONE_ID: string;
 }
 
+function jsonResponse(body: object, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // placeholder
-    return new Response(JSON.stringify({ success: false, message: "not implemented" }), {
-      status: 501,
-      headers: { "Content-Type": "application/json" },
-    });
+    try {
+      if (!authenticate(request, env.API_KEY)) {
+        return jsonResponse({ success: false, message: "Unauthorized" }, 401);
+      }
+
+      const url = new URL(request.url);
+
+      if (url.pathname !== "/update") {
+        return jsonResponse({ success: false, message: "Not found" }, 404);
+      }
+
+      const hostname = url.searchParams.get("hostname");
+      if (hostname === null || hostname.trim() === "") {
+        return jsonResponse({ success: false, message: "Missing hostname parameter" }, 400);
+      }
+
+      const ipInfo = detectIp(request, url);
+      if (ipInfo === null) {
+        return jsonResponse({ success: false, message: "Invalid or missing IP address" }, 400);
+      }
+
+      const recordType = ipInfo.version === "v6" ? "AAAA" : "A";
+      const result = await upsertDnsRecord(
+        env.CF_API_TOKEN,
+        env.CF_ZONE_ID,
+        hostname.trim(),
+        ipInfo.address,
+        recordType
+      );
+
+      if (!result.success) {
+        return jsonResponse({ success: false, message: result.message }, 500);
+      }
+
+      return jsonResponse(
+        { success: true, message: result.message, ip: ipInfo.address, type: recordType },
+        200
+      );
+    } catch (err) {
+      console.error("Unhandled error:", err);
+      return jsonResponse({ success: false, message: "Internal server error" }, 500);
+    }
   },
 } satisfies ExportedHandler<Env>;
