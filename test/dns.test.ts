@@ -118,6 +118,46 @@ describe("upsertDnsRecord - create new record (POST)", () => {
   });
 });
 
+describe("upsertDnsRecord - duplicate record cleanup", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("deletes extra duplicate records after updating the first", async () => {
+    const RECORD_ID_2 = "dup001";
+    const RECORD_ID_3 = "dup002";
+    const mockFetch = vi.mocked(fetch);
+    // List returns three records for the same hostname.
+    mockFetch
+      .mockResolvedValueOnce(
+        mockListResponse([
+          { id: RECORD_ID, type: "A", name: HOSTNAME, content: "1.2.3.4" },
+          { id: RECORD_ID_2, type: "A", name: HOSTNAME, content: "1.2.3.5" },
+          { id: RECORD_ID_3, type: "A", name: HOSTNAME, content: "1.2.3.6" },
+        ])
+      )
+      .mockResolvedValueOnce(mockMutateResponse(true))  // PUT first record
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))  // DELETE dup1
+      .mockResolvedValueOnce(new Response("{}", { status: 200 })); // DELETE dup2
+
+    const result = await upsertDnsRecord(TOKEN, ZONE, HOSTNAME, IPV4, "A");
+
+    expect(result.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+
+    // Second call should be PUT on the first record.
+    expect(mockFetch.mock.calls[1]![1]?.method).toBe("PUT");
+    // Third and fourth calls should be DELETE on the duplicate record IDs.
+    expect(mockFetch.mock.calls[2]![1]?.method).toBe("DELETE");
+    expect((mockFetch.mock.calls[2]![0] as string)).toContain(RECORD_ID_2);
+    expect(mockFetch.mock.calls[3]![1]?.method).toBe("DELETE");
+    expect((mockFetch.mock.calls[3]![0] as string)).toContain(RECORD_ID_3);
+  });
+});
+
 describe("upsertDnsRecord - error handling", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());

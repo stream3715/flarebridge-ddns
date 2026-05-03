@@ -32,6 +32,13 @@ export default {
       if (hostname === null || hostname.trim() === "") {
         return jsonResponse({ success: false, message: "Missing hostname parameter" }, 400);
       }
+      const trimmedHostname = hostname.trim();
+      // A valid hostname label is 1-63 characters of [a-zA-Z0-9-], and the
+      // full FQDN must not exceed 253 characters.
+      const HOSTNAME_RE = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
+      if (trimmedHostname.length > 253 || !HOSTNAME_RE.test(trimmedHostname)) {
+        return jsonResponse({ success: false, message: "Invalid hostname parameter" }, 400);
+      }
 
       const ipInfo = detectIp(request, url);
       if (ipInfo === null) {
@@ -42,7 +49,7 @@ export default {
       const result = await upsertDnsRecord(
         env.CF_API_TOKEN,
         env.CF_ZONE_ID,
-        hostname.trim(),
+        trimmedHostname,
         ipInfo.address,
         recordType
       );

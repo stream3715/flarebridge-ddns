@@ -72,6 +72,24 @@ async function putRecord(
   }
 }
 
+async function deleteRecord(
+  cfApiToken: string,
+  zoneId: string,
+  recordId: string
+): Promise<void> {
+  const url = `${CF_API_BASE}/zones/${zoneId}/dns_records/${recordId}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${cfApiToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Cloudflare API delete failed: ${response.status}`);
+  }
+}
+
 async function postRecord(
   cfApiToken: string,
   zoneId: string,
@@ -107,9 +125,13 @@ export async function upsertDnsRecord(
 ): Promise<DnsUpdateResult> {
   try {
     const records = await listRecords(cfApiToken, zoneId, type, hostname);
-    const existing = records[0];
+    const [existing, ...duplicates] = records;
     if (existing !== undefined) {
       await putRecord(cfApiToken, zoneId, existing.id, type, hostname, ip);
+      // Remove any duplicate records beyond the first to keep the zone clean.
+      for (const dup of duplicates) {
+        await deleteRecord(cfApiToken, zoneId, dup.id);
+      }
       return { success: true, message: "DNS record updated" };
     } else {
       await postRecord(cfApiToken, zoneId, type, hostname, ip);

@@ -98,3 +98,69 @@ describe("IP version detection", () => {
     expect(detectIp(req, url)?.version).toBe("v6");
   });
 });
+
+describe("IPv4 validation - octet range", () => {
+  it("accepts valid boundary values", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "0.0.0.0" });
+    expect(detectIp(req, url)).toEqual({ address: "0.0.0.0", version: "v4" });
+  });
+
+  it("accepts 255.255.255.255", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "255.255.255.255" });
+    expect(detectIp(req, url)).toEqual({ address: "255.255.255.255", version: "v4" });
+  });
+
+  it("rejects out-of-range octet (256)", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "256.1.1.1" });
+    expect(detectIp(req, url)).toBeNull();
+  });
+
+  it("rejects out-of-range octet (999.999.999.999)", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "999.999.999.999" });
+    expect(detectIp(req, url)).toBeNull();
+  });
+});
+
+describe("IPv4-mapped IPv6 unwrapping", () => {
+  it("unwraps ::ffff:a.b.c.d from CF-Connecting-IP to IPv4", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "::ffff:203.0.113.42" });
+    const result = detectIp(req, url);
+    expect(result).toEqual({ address: "203.0.113.42", version: "v4" });
+  });
+
+  it("unwraps ::ffff:a.b.c.d from ?ip= param to IPv4", () => {
+    const [req, url] = makeRequestAndUrl({}, "?ip=::ffff:192.168.1.1");
+    const result = detectIp(req, url);
+    expect(result).toEqual({ address: "192.168.1.1", version: "v4" });
+  });
+
+  it("does not unwrap plain IPv6 addresses", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "2001:db8::1" });
+    const result = detectIp(req, url);
+    expect(result).toEqual({ address: "2001:db8::1", version: "v6" });
+  });
+});
+
+describe("IPv6 validation", () => {
+  it("rejects a string of only colons", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "::::::::" });
+    expect(detectIp(req, url)).toBeNull();
+  });
+
+  it("rejects a string that is only digits with a colon appended", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "12345:" });
+    expect(detectIp(req, url)).toBeNull();
+  });
+
+  it("accepts a full-form IPv6 address", () => {
+    const [req, url] = makeRequestAndUrl({
+      "CF-Connecting-IP": "2001:0db8:0000:0000:0000:0000:0000:0001",
+    });
+    expect(detectIp(req, url)?.version).toBe("v6");
+  });
+
+  it("accepts the loopback address ::1", () => {
+    const [req, url] = makeRequestAndUrl({ "CF-Connecting-IP": "::1" });
+    expect(detectIp(req, url)?.version).toBe("v6");
+  });
+});

@@ -73,3 +73,29 @@ describe("authenticate - no credentials", () => {
     expect(authenticate(req, API_KEY)).toBe(false);
   });
 });
+
+describe("authenticate - timing-safe comparison edge cases", () => {
+  it("rejects a key that is a prefix of the real key", () => {
+    const prefix = API_KEY.slice(0, -1); // one character shorter
+    const req = makeRequest({}, `?key=${prefix}`);
+    expect(authenticate(req, API_KEY)).toBe(false);
+  });
+
+  it("rejects a key that has the real key as prefix (longer)", () => {
+    const longer = API_KEY + "x";
+    const req = makeRequest({}, `?key=${longer}`);
+    expect(authenticate(req, API_KEY)).toBe(false);
+  });
+
+  it("rejects empty string when key is non-empty", () => {
+    const req = makeRequest({}, "?key=");
+    expect(authenticate(req, API_KEY)).toBe(false);
+  });
+
+  it("rejects password that is a prefix of the real key via Basic auth", () => {
+    const prefix = API_KEY.slice(0, -1);
+    const encoded = btoa(`user:${prefix}`);
+    const req = makeRequest({ Authorization: `Basic ${encoded}` });
+    expect(authenticate(req, API_KEY)).toBe(false);
+  });
+});
